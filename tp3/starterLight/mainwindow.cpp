@@ -2,6 +2,9 @@
 #include "ui_mainwindow.h"
 #include <math.h>
 
+float max_gauss = 0;
+float min_gauss = 0;
+float moy = 0;
 
 /* **** début de la partie à compléter **** */
 float MainWindow::faceArea(MyMesh* _mesh, int faceID)
@@ -18,7 +21,7 @@ float MainWindow::faceArea(MyMesh* _mesh, int faceID)
         vectors.append(_mesh->point(vh)[1]);
         vectors.append(_mesh->point(vh)[2]);
     }
-    //on a nos 3 vecteurs :vecteur a = vector[0][1][2] vecteur b = [3][4][5] vecteur c = [6][7][8]
+    //on a nos 3 sommets de chaque face : vertex a = vector[0][1][2] vertex b = [3][4][5] vertex c = [6][7][8]
 
     QVector<float> vectAB;
     QVector<float> vectAC;
@@ -99,16 +102,16 @@ float MainWindow::angleEE(MyMesh* _mesh, int vertexID,  int faceID)
 
     //on normalise les vecteurs obtenu
     QVector<float> norme;
-    float tmp = vectors[0]*vectors[0]+vectors[1]*vectors[1]+vectors[2]*vectors[2];
 
-    norme.append(sqrt(tmp));
+    float tmp = vectors[0]*vectors[0]+vectors[1]*vectors[1]+vectors[2]*vectors[2];
+    norme.append(sqrt(tmp)); //sqrt(x^2+y^2+z^2) : C'est la norme du premier vecteur
 
     tmp = vectors[3]*vectors[3]+vectors[4]*vectors[4]+vectors[5]*vectors[5];
-    norme.append(sqrt(tmp));
+    norme.append(sqrt(tmp)); //C'est la norme du second vecteurs
 
-    for(int i=0; i<listePointsOnFace.size(); i++)
+    //normalisation des vecteur :  chacun des vecteur / par la norme
+    for(int i=0; i<listePointsOnFace.size(); i++) //2 vecteur : 2 iterations : 6points
     {
-
         vectors[i*3] = vectors[i*3]/norme[i];
         vectors[i*3+1] = vectors[i*3+1]/norme[i];
         vectors[i*3+2] = vectors[i*3+2]/norme[i];
@@ -119,7 +122,7 @@ float MainWindow::angleEE(MyMesh* _mesh, int vertexID,  int faceID)
     float c = vectors[2]*vectors[2+3];
 
     float prodScal = a+b+c;
-    abs(prodScal);
+    abs(prodScal); //garantie que le produit scalaire soit positif
 
     float angle = acos(prodScal)/**180/M_PI*/;
     return angle; //en radians
@@ -132,12 +135,14 @@ void MainWindow::H_Curv(MyMesh* _mesh)
 
 void MainWindow::K_Curv(MyMesh* _mesh)
 {
+    float interval = val_med(_mesh);
     resetAllColorsAndThickness(_mesh);
-    //on doit iterer sur chacun des sommet de toutes les face
 
     float sommeAngle = 0;
+    float gaussFace_Value;
 
-    QVector<float>GaussArray;
+    //on doit iterer sur chacun des sommet de toutes les face
+
     for(MyMesh::FaceIter curFace = _mesh->faces_begin(); curFace != _mesh->faces_end(); curFace++)
     {
         FaceHandle fh = *curFace;
@@ -153,37 +158,73 @@ void MainWindow::K_Curv(MyMesh* _mesh)
             VertexHandle vh2 = *curVertex;
 
             float gaussValue = (float(1)/barycentriqueArea(_mesh,vh2.idx()))*(2*M_PI-sommeAngle);
-            GaussArray.append(gaussValue);
+
+            gaussFace_Value += gaussValue;
 
         }
+
+        gaussFace_Value = (gaussFace_Value/3)*255/((max_gauss)); // Produit en croix
+        qDebug()<<gaussFace_Value<<endl;
+
+        if (gaussFace_Value <0)
+             gaussFace_Value =0;
+        if (gaussFace_Value > 255)
+            gaussFace_Value = 255;
+
+         _mesh->set_color(fh, MyMesh::Color(gaussFace_Value/2, gaussFace_Value/4, gaussFace_Value/3));
+
         sommeAngle = 0;
     }
 
-    float middle;
+    //qDebug() << max_gauss <<endl;
 
+    displayMesh(_mesh);
+}
+
+float MainWindow::val_med(MyMesh *_mesh)
+{
+    float sommeAngle = 0;
+    float gaussFace_Value;
     for(MyMesh::FaceIter curFace = _mesh->faces_begin(); curFace != _mesh->faces_end(); curFace++)
     {
         FaceHandle fh = *curFace;
+        for (MyMesh::FaceVertexIter curVertex = _mesh->fv_iter(fh); curVertex.is_valid(); curVertex ++)
+        {
+            VertexHandle vh = *curVertex;
+            sommeAngle += angleEE(_mesh, vh.idx(), fh.idx());
+
+        }
 
         for(MyMesh::FaceVertexIter curVertex = _mesh->fv_iter(fh); curVertex.is_valid(); curVertex ++)
         {
-
             VertexHandle vh2 = *curVertex;
 
-            middle += GaussArray[vh2.idx()];
+            float gaussValue = (float(1)/barycentriqueArea(_mesh,vh2.idx()))*(2*M_PI-sommeAngle);
+            //GaussArray.append(gaussValue);
+
+
+            if(max_gauss < gaussValue)
+            {
+                 max_gauss = gaussValue;
+            }
+            if(min_gauss > gaussValue)
+            {
+                min_gauss = gaussValue;
+            }
+
+            gaussFace_Value += gaussValue;
+
+
 
         }
-        middle = (middle/3)/1000; //on fait la moyenne des valeurs gaussienne par sommet pour chaque face
-        qDebug()<<middle<<endl;
-        if (middle <0)
-             middle =0;
-        if (middle > 255)
-            middle = 255;
-        _mesh->set_color(fh, MyMesh::Color(middle, 0, 0));
 
-    }
 
-    displayMesh(_mesh);
+      }
+
+    moy = abs(static_cast <float>(gaussFace_Value/_mesh->n_faces()));
+    return abs(static_cast <float>(max_gauss/_mesh->n_faces()));
+
+
 }
 /* **** fin de la partie à compléter **** */
 
