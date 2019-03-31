@@ -100,8 +100,8 @@ void MainWindow::decimation(MyMesh* _mesh, int percent, QString method)
             MyMesh::Point point1 = _mesh->point(v1);
 
             float size = (point1 + point0).norm();
-            qDebug()<< "size : "<<size;
-            qDebug()<< "id : "<<(*cur).idx();
+            //qDebug()<< "size : "<<size;
+            //qDebug()<< "id : "<<(*cur).idx();
             //MyMesh::EdgeHandle * ee = (*cur).idx();
             ed.insert(size,(*cur).idx());
         }
@@ -110,22 +110,25 @@ void MainWindow::decimation(MyMesh* _mesh, int percent, QString method)
         int i = 0;
         while(_mesh->n_edges() > start_n_edge * static_cast<float>(percent) / 100 && i < ed.size())
         {
-            qDebug()<<"range : "<<i;
+            /*qDebug()<<"range : "<<i;
             qDebug()<<"value : " << ed.first();
             qDebug()<<"Edge Size : "<< ed.key(ed.first());
-            qDebug()<<"tab size : "<< ed.size();
+            qDebug()<<"tab size : "<< ed.size();*/
 
-            //if(ed.first() != -1)
-            //{
-                if(!_mesh->is_collapse_ok(_mesh->halfedge_handle(
-                                             _mesh->edge_handle(((unsigned int)ed.first())),0)))
+            if(_mesh->edge_handle(static_cast <unsigned int>(ed.first())).is_valid())
+            {
+
+
+                if(_mesh->is_collapse_ok(_mesh->halfedge_handle(
+                                             _mesh->edge_handle((static_cast <unsigned int>(ed.first()))),0)))
                 {
                     collapseEdge(_mesh,ed.first());
                 }
-                else {
+                /*else {
                     break;
-                }
-            //}
+                }*/
+
+            }
             i++;
             //ed.remove(ed.first());
             ed.remove(ed.key(ed.first()));
@@ -139,7 +142,110 @@ void MainWindow::decimation(MyMesh* _mesh, int percent, QString method)
     }
     else if(method == "Par angle")
     {
+        QMultiMap <float, int> ed;
+        for(MyMesh::FaceIter curFace = _mesh->faces_begin(); curFace != _mesh->faces_end(); curFace++)
+        {
+            FaceHandle fh = *curFace;
+            for (MyMesh::FaceVertexIter curVertex = _mesh->fv_iter(fh); curVertex.is_valid(); curVertex ++)
+            {
 
+                VertexHandle vh = *curVertex;
+                //FaceHandle fh = _mesh->face_handle(faceID);
+                QVector<VertexHandle> listePoints;
+                QVector<VertexHandle> listePointsOnFace;
+                QVector<float> vectors;
+                //On identifie les point voisins de vertexID qui appartiennent à faceID
+
+                //tout les points voisins de vertexID
+                for (MyMesh::VertexVertexIter curVertex = _mesh->vv_iter(vh); curVertex.is_valid(); curVertex ++)
+                {
+                    VertexHandle v = *curVertex;
+                    listePoints.append(v);
+                }
+                //parmis ces points ceux qui appartiennent à la faceID
+
+                for(MyMesh::FaceVertexIter curVertex = _mesh->fv_iter(fh); curVertex.is_valid(); curVertex ++)
+                {
+                    VertexHandle v = *curVertex;
+                    if(listePoints.contains(v) && v.idx() !=vh.idx())
+                    {
+                        listePointsOnFace.append(v);
+                    }
+                }
+
+                //On créer des vecteurs a partir des point obtenu
+                for(int i=0; i<listePointsOnFace.size();i++)
+                {
+                    vectors.append((_mesh->point(listePointsOnFace[i])[0])-(_mesh->point(vh)[0]));
+                    vectors.append((_mesh->point(listePointsOnFace[i])[1])-(_mesh->point(vh)[1]));
+                    vectors.append((_mesh->point(listePointsOnFace[i])[2])-(_mesh->point(vh)[2]));
+
+                }
+
+                //on normalise les vecteurs obtenu
+                QVector<float> norme;
+                float tmp = vectors[0]*vectors[0]+vectors[1]*vectors[1]+vectors[2]*vectors[2];
+
+                norme.append(sqrt(tmp));
+
+                tmp = vectors[3]*vectors[3]+vectors[4]*vectors[4]+vectors[5]*vectors[5];
+                norme.append(sqrt(tmp));
+
+                for(int i=0; i<listePointsOnFace.size(); i++)
+                {
+
+                    vectors[i*3] = vectors[i*3]/norme[i];
+                    vectors[i*3+1] = vectors[i*3+1]/norme[i];
+                    vectors[i*3+2] = vectors[i*3+2]/norme[i];
+                }
+
+                float a = vectors[0]*vectors[0+3];
+                float b = vectors[1]*vectors[1+3];
+                float c = vectors[2]*vectors[2+3];
+
+                float prodScal = a+b+c;
+                abs(prodScal);
+
+                float angle = acos(prodScal)/**180/M_PI*/;
+                //return angle; //en radians
+                ed.insert(angle, vh.idx());
+             }
+        }
+
+        qDebug()<<"size vect : "<<ed.size();
+
+        int i = 0;
+        while(_mesh->n_edges() > start_n_edge * static_cast<float>(percent) / 100 && i < ed.size())
+        {
+            /*qDebug()<<"range : "<<i;
+            qDebug()<<"value : " << ed.first();
+            qDebug()<<"Edge Size : "<< ed.key(ed.first());
+            qDebug()<<"tab size : "<< ed.size();*/
+
+            if(_mesh->edge_handle(static_cast <unsigned int>(ed.first())).is_valid())
+            {
+
+
+                if(_mesh->is_collapse_ok(_mesh->halfedge_handle(
+                                             _mesh->edge_handle((static_cast <unsigned int>(ed.first()))),0)))
+                {
+                    collapseEdge(_mesh,ed.first());
+                }
+                /*else {
+                    break;
+                }*/
+
+            }
+            i++;
+            //ed.remove(ed.first());
+            ed.remove(ed.key(ed.first()));
+            //collapseEdge(_mesh,ed.begin().key().idx());
+            //collapseEdge(_mesh,ed.value(ed.end().key()).idx());
+            //ed.remove(ed.begin().key(),ed.value(ed.end().key()));
+            //ed.erase(ed.begin());
+            //ed.remove(ed.end().key(),ed.value(ed.end().key()));
+
+        }
     }
     else if(method == "Par planéité")
     {
